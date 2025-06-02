@@ -1,3 +1,19 @@
+"""
+---------------------
+Wavecal_for_BlueMUSE
+---------------------
+
+Cinta Vidante, 2025
+
+This module contains functions and classes used to generate simulation 
+of BlueMUSE's calibration images.
+
+Part of my work on BlueMUSE with Peter Weilbacher, AIP.
+
+"""
+
+# ------------------------------------------------------------
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -18,6 +34,7 @@ from datetime import datetime, timezone
 # ------------------------------------------------------------
 
 def polyfit2d(x, y, z, degree=1, max_degree=None, scale=True, plot=False):
+     
 	"""A simple 2D polynomial fit to data x, y, z
 	The polynomial can be evaluated with numpy.polynomial.polynomial.polyval2d
 
@@ -165,7 +182,20 @@ def polyfit2d(x, y, z, degree=1, max_degree=None, scale=True, plot=False):
 def get_gaussian(y, x):
 
     """
-    Gaussian function.
+    Gaussian function fitting with astropy.
+
+    Parameters:
+    ----------
+    y   : array-like
+        y values to fit
+    x   : array-like
+        corresponding x values
+
+    Returns:
+    ----------
+    fit: Gaussian1D
+        fitted Gaussian1D object
+
     """
 
     lmfitter = LevMarLSQFitter()
@@ -179,10 +209,22 @@ def get_gaussian(y, x):
 def read_ascii_config(file_path):
 
     """
-    Read from ASCII file
-    
+    Function to read from ASCII file. The input of the main class comes
+    from an ASCII file.
+
+    Parameters:
+    ----------
+    file_path : str
+            path to configuration file
+
+    Returns:
+    ----------
+    config : dict
+          dictionary containing the parameters
+
     """
 
+    # Initialize dictionary
     config = {}
 
     with open(file_path, 'r') as file:
@@ -204,8 +246,24 @@ def read_ascii_config(file_path):
 # --------------------------------------------
 
 def get_poly_1d(x, coef):
+
     """
-    Returns a polynomial 1D function from a set of coefficients.
+    1D polynomial at x given coefficients.
+
+    The polynomial is defined as:
+        f(x) = c_0 + c_1 * x + c_2 * x^2 + ... + c_n * x^n
+
+    Parameters
+    ----------
+    x : array-like
+      x values that want to be evaluated
+    coef : array-like
+      coefficients of the polynomial
+
+    Returns
+    -------
+    y : array-like
+      polynomial values evaluated at x
 
     """
     return np.polynomial.polynomial.polyval(x, coef)
@@ -213,9 +271,29 @@ def get_poly_1d(x, coef):
 # --------------------------------------------
 
 def solve_equations(y_val, coef, x_fixed, wvl_target):
+
     """
+    Residual function to determine the solution from scipy's fsolve.
+
     Two sets of equations to solve a 2D polynomial problem.
-    'If z = f(x, y), and one has z, what would x and y be?
+    'If z = f(x, y), and one has z (wvl), what would x and y be?
+
+    Parameters
+    ----------
+    y_val   : float
+            y_val that wants to be evaluated
+    coef    : array-like
+            coefficients of the 2D polynomial
+    x-fixed : float
+            x-axis pixel that is known
+    wvl_target : float
+              wavelength target 
+
+    Returns
+    -------
+    wvl - wvl_target : float
+        difference between target and current iteration.
+        a root-finding algorithm minimizes this to zero.
 
     """
 
@@ -233,7 +311,25 @@ def solve_for_y_wvl(coef, wvl_target, x_fixed, initial_guess=0, reso=False):
 
     """
     Function to find solution to a 2D polynomial, z = f(x, y). Uses scipy's fsolve.
-    Also find the dispertion pix/angstrom, as in dy/dz. 
+    Also find the dispertion pix/angstrom, as in dy/dz.
+
+    Parameters
+    ----------
+    coef    : array-like
+            coefficients of the 2D polynomial
+    x-fixed : float
+            x-axis pixel that is known
+    wvl_target : float
+              wavelength target 
+    initial_guess : float
+                 initial guess of the root-finding algorithm
+
+    Returns
+    -------
+    sol : float
+        solution for 2D polynomial, given z and x with f(x, y) = z.
+    reso : float
+        finding dy/dz
     
     """
 
@@ -251,14 +347,36 @@ def solve_for_y_wvl(coef, wvl_target, x_fixed, initial_guess=0, reso=False):
         return sol, reso
     
     else:
-        return sol
+        return sol, None
     
 # --------------------------------------------
 
 def transform_to_pix(disp):
 
+    """
+    Function to transfrom from milimeter (mm) to pixel values. The BlueMUSE's
+    dispersion files is given in mm as distance from the center. This code 
+    transforms the X and Y position to pixels from 0.
+    
+    One pixel is 15 micrometer (um).
+
+    Parameters
+    ----------
+    disp    : pandas DataFrame
+            dataframe of BlueMUSE's dispersions. 
+            the values of X and Y are in mm calculated from the center.
+
+    Returns
+    -------
+    disp    : pandas DataFrame
+            dataframe with X and Y position in pixels.
+
+    """
+
+    # Copy the pixel dispersion's dataframe 
     pix_disp = disp.copy()
 
+    # Transform from mm to pixel
     pix_disp['CX_DET'] = ((pix_disp['CX_DET'].values * u.mm).to(u.um) / (15 * u.um)).value + 2048
     pix_disp['CY_DET'] = ((pix_disp['CY_DET'].values * u.mm).to(u.um) / (15 * u.um)).value + 2056
 
@@ -266,30 +384,90 @@ def transform_to_pix(disp):
 
 # --------------------------------------------
 
-# def create_subset(pix_disp, n):
+# ----------- uncomment if needed ------------
 
-#     """
-#     Create subset for each slice
-#     """
+def create_subset(pix_disp, n):
 
-#     # Make a subset for each slice. 
-#     subset = pix_disp[['WVL', 'X_{}'.format(n), 'Y_{}'.format(n)]]
+    """
 
-#     # Drops any rows that have NaN 
-#     subset = subset.dropna()
+    Create subset for each slice. This is the format of the
+    old dispersion file.
 
-#     # Convert pandas dataframe to numpy arrays
-#     X = subset['X_{}'.format(n)].values
-#     Y = subset['Y_{}'.format(n)].values
-#     WVL = subset['WVL'].values
+    Parameters
+    ----------
+    pix_disp   : pandas DataFrame
+            dataframe of BlueMUSE's dispersions. 
 
-#     return X, Y, WVL
+    Returns
+    -------
+    X   : array-like
+        X values of every center position in one slice
+    Y   : array-like
+        Y values for every center position in one slice
+    WVL : array-like
+        wavelengths at each X and Y
+
+    """
+
+    # Make a subset for each slice. 
+    subset = pix_disp[['WVL', 'X_{}'.format(n), 'Y_{}'.format(n)]]
+
+    # Drops any rows that have NaN 
+    subset = subset.dropna()
+
+    # Convert pandas dataframe to numpy arrays
+    X = subset['X_{}'.format(n)].values
+    Y = subset['Y_{}'.format(n)].values
+    WVL = subset['WVL'].values
+
+    return X, Y, WVL
 
 # --------------------------------------------
 
 def write_FITS(data, img, name, spec):
+
     """
-    Class to generate all FITS files
+    Class to generate all FITS files.
+
+    I wrote the headers manually.. there should be a more
+    efficient way to do this..
+
+    Parameters
+    ----------
+    data   : 2D array-like
+            the 2D array of the image that wants to be generated
+    img    : dict
+            the image dictionary with specialized info for different images.
+            looks like this: 
+
+            'flat': ["Flat image", None, other_info],
+            'bias': ["Bias image", None, other_info],
+            'wavemap': ["Wavelength map", None, other_info],
+            'arc': ["Arc exposure", "Line identification", other_info_arc, "arc"],
+            'spec': ["Full spectrum", "Interpolation", other_info_arc, "spec"]
+
+            other_info is an array for:
+            [trace_degree, wavecal_degree_1, wavecal_degree_2,
+            bias_flux, flat_flux, 'BlueMUSE']
+
+            # This is difined in the class definition
+    
+    name    : str
+            name for file saving
+    spec    : bool
+            determine if there is a full-spectrum file (not just lines)
+
+    Returns
+    -------
+    hdr     : Header
+            primary HDU header
+    hdx     : Header
+            header to be put to the extension file
+    hdu_img : ImageHDU 
+            astropy fits image HDU of data with header = hdx
+    hdul    : HDUList
+            list of all HDUs that wants to be generated in the FITS
+
     """
 
     # Determine time
@@ -314,18 +492,16 @@ def write_FITS(data, img, name, spec):
         else:
             hdr['EXPTIME'] = (1.0, '[s] exposure time')   
 
-#   DATE-OBS= '2025-01-07T17:17:17.171' / observing date
-
-    # hdr['DATE'] = (ut.fits, 'Current time in UTC')
-
     # EXTENSION header
     hdx = fits.Header()
 
+    # If the data is spectra (arc line or full specta)
     if img[1] != None:
         hdr['METHOD'] = "{}".format(img[1])
         hdx['OBJECT'] = "{} of {}".format(img[0], name)
         hdr['HIERARCH ARC LAMP'] = "{}".format(name)
 
+        # If there is full spec (not arc lines):
         # if spec:
         #     hdr['SOURCE'] = (other_info[5], "Source of spectra")
         # else:
@@ -334,16 +510,18 @@ def write_FITS(data, img, name, spec):
     else:
         hdx['OBJECT'] = "{}".format(img[0])
 
+    # Get other info 
     other_info = img[2]
+
     hdr['SOURCE'] = (other_info[5], "Source of spectra")
     hdr['HIERARCH DEGREE SLICE TRACING'] = (other_info[0], '1D poly degree for slice tracing, x = f(y)')
     hdr['HIERARCH DEGREE WAVE CALIB 1'] = (other_info[1], '2D poly degree for wavelength calibration, horizontal')
     hdr['HIERARCH DEGREE WAVE CALIB 2'] = (other_info[2], '2D poly degree for wavelength calibration, vertical')
-    # hdr['HIERARCH SLICE WIDTH'] = (other_info[2], 'Width of each slice')
-    # hdr['BIAS FLUX'] = (other_info[3], 'Flux for bias')
 
+    # Write Primary HDU into empty header
     empty_hdr = fits.PrimaryHDU(header=hdr)
 
+    # Entire hdx list
     hdx['EXTNAME'] = ('CHAN01  ', "Extension name")
     hdx['INHERIT'] =  ('T', 'Denotes the INHERIT keyword convention')
     hdx['HIERARCH ESO DET CHIP DATE']   = (ut.fits, "[YYYY-MM-DD] Date of")
@@ -427,29 +605,44 @@ def write_FITS(data, img, name, spec):
     # Export
     if img[1] != None:
         if other_info[4] == 'Pen-Ray':
-            hdul.writeto('output/files_from_py/{}_{}_PR_img.fits'.format(name, img[3]), overwrite=True)
+            hdul.writeto('output/files_from_py/{}_{}_PR_img.fits'.format(img[3], name, overwrite=True))
         else:
-            hdul.writeto('output/files_from_py/{}_{}_4MOST_img.fits'.format(name, img[3]), overwrite=True)
+            hdul.writeto('output/files_from_py/{}_{}_4MOST_img.fits'.format(img[3], name, overwrite=True))
     else:
         hdul.writeto('output/files_from_py/{}_img.fits'.format(name), overwrite=True)
 
 # --------------------------------------------
 
 def get_edges(allpix):
+
     """
     Class to check existence of overlapping slices.
+
+    Parameters
+    ----------
+    allpix : 2D array
+         2D array of the BlueMUSE image with slice
+
+    Returns
+    -------
+    edges : list of lists
+        places where edges are
     
     """
     
+    # Initialize edges
     edges = []
 
+    # Loop over the columns
     for i in range(4100):
 
+        # Initialize y edges
         y_edges = []
 
+        # Get y position of one column/slice
         y_array = allpix[i,:]
         
-        # Loop the whole column
+        # Loop over the rows in the columns
         for j in range(len(y_array)-1):
 
             # Print the x position where it is the edges, left and right
@@ -467,20 +660,44 @@ def get_edges(allpix):
 
 def check_separation(control_pix, allpix):
 
+    """
+    Checks for the presence of overlapping slices. This program also identifies
+    if the smallest gap between each slice. 
+
+    Parameters
+    ----------
+    control_pix : 2D array
+                BlueMUSE image with small slice width as control
+    all_pix     : 2D array
+                BlueMUSE image with slice width that wants to be evaluated
+
+    """
+
+    # Find the edges location in control_pix
     control_edges = get_edges(control_pix)
+
+    # Find the edges location in all_pix
     edges = get_edges(allpix)
 
+    # Initialize minimum separation
     min_sep = 1000
+
+    # Initialize overlapping status
     overlap_detected = False
 
+    # Loop over all edges in all_pix
     for i in range(len(edges)):
 
+        # If there is edges in one row
         if any(edges[i]):
 
+            # Loop for every row
             for j in range(len(edges[i])-1):
 
+                # Calculate the gap between each edges, from one slice to the other
                 gap = edges[i][j+1] - edges[i][j]
 
+                # If it's not the same with the control edges, that means there is overlapping
                 if len(edges[i]) != control_edges[i]:
 
                     print('overlapping slices!')
@@ -488,8 +705,12 @@ def check_separation(control_pix, allpix):
                     
                     break 
 
+                # Otherwise there is no overlapping
                 else:
+
+                    # If the gap is less than minimum separation, save it as minimum now
                     if gap < min_sep:
+
                         min_sep = gap
                         xpos = edges[i][j]
                         ypos = i
@@ -506,9 +727,33 @@ def check_separation(control_pix, allpix):
 
 def combine_images(imglist):
 
+    """
+    Function to combine images to make realistic noice.
+
+    make_realistic_noise generates noise for 4 quadrants of the BlueMUSE image
+    separately.
+
+    This program combines the 4 quadrants into one.
+
+    Parameters
+    ----------
+    imglist : list of 2D array
+            list containing 4 quadrants
+
+    Returns
+    ----------
+    mergelist : 2D array
+            combined 4 quadrants into one BlueMUSE image
+
+    """
+
+    # Combine q1 and q3
     uplist = np.concatenate((imglist[0], imglist[1]), axis=1)
+
+    # Combine q2 and q4
     downlist = np.concatenate((imglist[2], imglist[3]), axis=1)
 
+    # Combine them all
     mergelist = np.concatenate((uplist, downlist), axis=0)
 
     return mergelist
@@ -517,34 +762,78 @@ def combine_images(imglist):
 
 def make_realistic_noise(size, ovsc, dict, array=None, no_bias=False, just_bias=False):
 
+    """
+    Function to make realistic noise for different images.
+
+    Parameters
+    ----------
+    size    : int, 2-tuple
+            size of x and y
+    ovsc    : int
+            size of overscan
+    dict    : dict
+            dictionary for info on quadrants
+    array   : array
+            image that want to be given noise
+    no_bias : bool
+            adds just the quadrant without the bias
+    just_bias : bool
+            generate just the bias
+
+    Returns
+    ----------
+    bias_img : 2D array
+            bias image with quadrant noise
+    raw_img  : 2D array
+            image with quadrant bias noise
+    
+    """
+
+    # Get the half of x-axis size and y-axis
     half_x = int(size[0]/2)
     half_y = int(size[1]/2)
 
+    # Initialize array
     biasimg = []
     rawimg = []
 
+    # Loop over dictionary (4 quadrants with different parameters) 
     for key, l in dict.items():
 
+        # Make random noise
         bias = np.random.normal(loc=l[4], scale=l[5], size=[half_y+(ovsc*2),
                                                             half_x+(ovsc*2)])
         
+        # If just bias image and nothing else
         if just_bias:
             biasimg.append(bias)
+
+        # Otherwise generate 4 quadrants 
         else:
+
+            # Get 4 quadrants of the overlaying image (e.g., flat, arc etc)
             quardx = array[l[0]:l[1],l[2]:l[3]].copy()
+
+            # Make an array of quadrants
             raw = np.zeros((half_y+(ovsc*2), half_x+(ovsc*2)))
 
+            # Add the raw into the quadrant
             raw[ovsc:half_y+ovsc, ovsc:half_x+ovsc] = quardx
 
             if no_bias:
                 rawimg.append(raw)
+
             else:
+                # Add bias to raw
                 raw = raw + bias
                 rawimg.append(raw)
     
+    # If just bias combines the bias image
     if just_bias:
         bias_img = combine_images(biasimg)
         return bias_img
+
+    # Else, add the raw to the bias
     else:
         raw_img = combine_images(rawimg)
         return raw_img
@@ -553,7 +842,7 @@ def make_realistic_noise(size, ovsc, dict, array=None, no_bias=False, just_bias=
 
 class generate_images():
     """
-    Class to generate simulated BlueMUSE images.
+    Class to simulate a number of BlueMUSE calibration images.
     
     """
 
@@ -567,8 +856,8 @@ class generate_images():
         self.source = source                    # Source spectra
 
         self.size = size                        # A tuple of matrix size: size_x and size_y
-        self.half_x = int(self.size[0]/2)
-        self.half_y = int(self.size[1]/2)
+        self.half_x = int(self.size[0]/2)       # Determine half of size x
+        self.half_y = int(self.size[1]/2)       # Determine half of size y
         # self.slice_width = slice_width        # Slice width
         self.overscan = overscan                # Overscan width
 
@@ -580,14 +869,14 @@ class generate_images():
         self.bias_flux = bias_flux              # Flux for bias images
 
         self.trace_degree = 8                   # Polynomial degree for slice tracing
-        self.wavecal_degree_1 = 2                # Polynomial degree for wavelength calibration
-        self.wavecal_degree_2 = 11
+        self.wavecal_degree_1 = 2               # the 1st degree for 2D polynomial 
+        self.wavecal_degree_2 = 11              # the 2nd degree for 2D polynomial
 
         self.std = self.FWHM / 2.355            # Standard deviation derived from FWHM, in angstrom
         # self.half = int(self.slice_width / 2)   # Half of slice width
 
-        self.noise = noise
-        self.spec = spec
+        self.noise = noise                      # If noise is going to be generated
+        self.spec = spec                        # If there is full-spectrum (not just arc lines)
 
         if self.spec:
             self.full_spec = full_spec          # Full spectra, if want to convert the spectra
@@ -596,6 +885,7 @@ class generate_images():
 
             self.specpix = np.zeros((self.size[1], self.size[0]), dtype=np.float32)     # Array to store
 
+        # Initialize array for different wavelength calibration images
         # For flat image, initially an array of zeros with a size of size_x (self.size[0]) and size_y (self.size[1])
         self.allpix = np.zeros((self.size[1], self.size[0]), dtype=np.float64)
         self.wvlpix = np.empty((self.size[1], self.size[0]), dtype=np.float64) + np.nan
@@ -606,9 +896,11 @@ class generate_images():
         other_info_arc = [self.trace_degree, self.wavecal_degree_1, self.wavecal_degree_2,
                       self.bias_flux, self.flat_flux, self.source]
         
+        # List of other_info for non-arc images
         other_info = [self.trace_degree, self.wavecal_degree_1, self.wavecal_degree_2,
                       self.bias_flux, self.flat_flux, 'BlueMUSE']
         
+        # Dictionary for information regarding different images
         self.img_dict = {
                         'flat': ["Flat image", None, other_info],
                         'bias': ["Bias image", None, other_info],
@@ -632,28 +924,49 @@ class generate_images():
     # --------------------------------------------
     
     def generate_pix_disp(self):
+
         """
         Generate a dataframe of the BlueMUSE dispersion table. The values here at the position of each wavelength 
         point at the center of the slice. 
+
+        Parameters
+        ----------
+        pix_disp    : pandas DataFrame
+                    BlueMUSE dispersion in mm
+
+        Returns
+        ----------
+        pix_disp    : pandas DataFrame
+                    BlueMUSE dispersion in pix
+        trace_coef_list : list [48x3]
+                        list of the tracing coefficients on the left edge,
+                        center, and right edge of every slice
+        wavecal_coef_list : list [48]
+                        list of the 2D polynomial wavelength calibration
+                        coefficients for 48 slices
         """
 
         # Transform to pix
         self.pix_disp = transform_to_pix(self.pix_disp)
 
+        # Initialize coefficient list
         self.trace_coef_list = []  # 48 x 3
         self.wavecal_coef_list = [] # 48
 
+        # Loop for every slice
         for j in range(48):
 
             # To indicate slice number
             n = j + 1
 
+            # Loop for center, left edge, right edge
             for m in range(3):
 
                 # For one slice and FIE (0 -> center, 1 -> slice right, 2 -> slice left)
                 pix_disp_fie_in = self.pix_disp[(self.pix_disp['CONF'] == n) & 
                                         (self.pix_disp['FIE'] == m+1)].copy().dropna()
 
+                # Get X, Y, and WVL
                 X = pix_disp_fie_in['CX_DET'].values
                 Y = pix_disp_fie_in['CY_DET'].values
                 WVL = pix_disp_fie_in['WVL'].values
@@ -667,6 +980,7 @@ class generate_images():
             # For one slice and FIE (0 -> center, 1 -> slice right, 2 -> slice left)
             pix_disp_fie = self.pix_disp[(self.pix_disp['CONF'] == n)].copy().dropna()
 
+            # Get X, Y, and WVL of entire slice without differentiating center, left, and right
             X = pix_disp_fie['CX_DET'].values
             Y = pix_disp_fie['CY_DET'].values
             WVL = pix_disp_fie['WVL'].values
@@ -681,39 +995,58 @@ class generate_images():
 
     def make_flat_wavemap_bias(self, FITS=False, just_array=False):
 
+        """
+        Generate simulated images of bias, flat, and wavemap
+
+        Parameters
+        ----------
+        FITS    : bool
+                generate FITS image or not
+        just_array : bool
+                print just the flat array
+
+        Returns
+        ----------
+        allpix  : 2D array
+                flat image
+        biaspix : 2D array
+                bias image
+        wvlpix  : 2D array
+                wavemap image
+        
+        """
+
+        # Loop for every slice
         for j in range(48):
             
+            # To count from 1
             n = j + 1
 
             # Create integers arrays of pixels from Y values.
             # For example, if the slice goes from y_pix = 25.6 to 78.1, I make an array of 
             # y pixels from 26 to 78. This will be the length of each slice.
-            
-            # yarray = np.arange(np.round(min(Y)), np.round(max(Y)))
             yarray = np.arange(0, self.size[1])
 
+            # Find the left and right edge of each row 
             xright = get_poly_1d(yarray, self.trace_coef_list[(j*3)+1])
-            xleft = get_poly_1d(yarray, self.trace_coef_list[(j*3)+2])
-
-            # # Determine wavelength for every y position           
-            # wavel = get_poly_1d(yarray, self.wavecal_coef_list[j])	        
+            xleft = get_poly_1d(yarray, self.trace_coef_list[(j*3)+2])        
 
             # Convert to integers
             yarray = yarray.astype(int)
             xright = xright.astype(int)
             xleft = xleft.astype(int)
 
+            # Loop for every row
             for i in range(len(yarray)):
 
                 # For each y position, determine the range of slice
                 x_right = xright[i]
                 x_left = xleft[i]
 
-                # To check whether the x position indeed returns an array with size slice_width
+                # Make an array of x pixels each row
                 xxx = np.arange(x_left, x_right)
-                # if len(xxx) != slice_width:
-                #     raise ValueError("Array doesn't match the selected slice width")
 
+                # For every x position 
                 for x in xxx:
 
                     # Flat image, replaces values in slice range with flat_flux
@@ -724,6 +1057,7 @@ class generate_images():
                     self.wvlpix[yarray[i], x] = np.polynomial.polynomial.polyval2d(x, yarray[i], 
                                                                                  self.wavecal_coef_list[j])
 
+                # Add noise if noise is desired
                 if self.noise:
 
                     # Add photon noise
@@ -737,10 +1071,12 @@ class generate_images():
                         mu, sigma = old_value, np.sqrt(old_value)
                         new_value = np.random.normal(mu, sigma, 1)
 
+                        # Replace value with noise + value
                         self.allpix[yarray[i], m] = new_value[0]
     
             print('Slice {} done'.format(n),end='\r')
         
+        # If no noise and want to generate FITS
         if (self.noise == False) and FITS:
 
             self.allpix = self.allpix.astype('int16')
@@ -755,15 +1091,18 @@ class generate_images():
             write_FITS(self.biaspix, self.img_dict['bias'], 'bias', self.spec)
             print('FITS for bias done')
         
+        # If noise
         if self.noise:
 
+            # Make realistic noise for flat
             self.allpix = make_realistic_noise(self.size, self.overscan, self.quards, 
                                                self.allpix)
-            # self.wvlpix = make_realistic_noise(self.size, self.overscan, self.quards, 
-            #                                    self.wvlpix, no_bias=True)
+
+            # For bias
             self.biaspix = make_realistic_noise(self.size, self.overscan, self.quards, 
                                                 just_bias=True)
             
+            # Generate FITS for image with noise
             if FITS:
                 self.allpix = self.allpix.astype('int16')
                 self.biaspix = self.biaspix.astype('int16')
@@ -785,23 +1124,41 @@ class generate_images():
     def make_arc(self, FITS=False):
 
         """
-        Class to make all images: flat, bias, wavemap, and arc lines. 
+        Class to make arc images.
+
+        Parameters
+        ----------
+        FITS    : bool
+                generate FITS image or not
+
+        Returns
+        ----------
+        arcpix : 2D array
+                arc image
 
         """
 
+        # Loop for every slice
         for j in range(48):
 
+            # Add one
             n = j + 1
             
-            # yarray = np.arange(np.round(min(Y)), np.round(max(Y)))
+            # Make int y array (all rows per slice)
             yarray = np.arange(0, self.size[1])
+
+            # Find the center, left edge, and right edge of every row
             xcenter = get_poly_1d(yarray, self.trace_coef_list[(j*3)])
             xright = get_poly_1d(yarray, self.trace_coef_list[(j*3)+1])
             xleft = get_poly_1d(yarray, self.trace_coef_list[(j*3)+2])
 
+            # Find the maximum x right
             av_right = int(np.max(xright))
+
+            # Find the minimum x left
             av_left = int(np.max(xleft))
 
+            # Make an array of x position in each row with 4 pixel buffer
             xxx = np.arange(av_left-2,av_right+2, dtype=int)
 
             # Determine wavelength for every y position           
@@ -822,8 +1179,10 @@ class generate_images():
                 # Get each lambda
                 lam = self.arc_lines['lambda'][idx]
 
+                # Only count wavelength inside the WVL
                 if (lam >= min(WVL)) and (lam <= max(WVL)):
 
+                    # For every x position in each row
                     for x in xxx:
                 
                         # Get the x and y solution (sol) for each wavelength.
@@ -833,9 +1192,12 @@ class generate_images():
 
                         # Get y_center for the wavelength
                         y_wvl = sol[0]
+
+                        # Get the right and left edge from y_wvl
                         xr_wvl = int(get_poly_1d(y_wvl, self.trace_coef_list[(j*3)+1]))
                         xl_wvl = int(get_poly_1d(y_wvl, self.trace_coef_list[(j*3)+2]))
 
+                        # If x is within the range
                         if (x >= xl_wvl) and (x <= xr_wvl):
 
                             # if (n % 10 == 0):
@@ -860,11 +1222,12 @@ class generate_images():
                             gaussian_values = gaussian(y)
 
                             # Distribute gaussian values for all x positions
-
                             if (y_up <= self.size[1]) and (y_down >= 0):
 
+                                # Put the gaussian fit to the arc image
                                 self.arcpix[y_down:y_up,x] = gaussian_values
 
+                                # Add noise
                                 if self.noise:
 
                                     # Add photon noise
@@ -882,6 +1245,7 @@ class generate_images():
                 
             print('Slice {} done'.format(n),end='\r')
 
+        # If no noise and generate FITS
         if (self.noise == False) and FITS:
 
             self.arcpix = self.arcpix.astype('int16')
@@ -890,6 +1254,7 @@ class generate_images():
             write_FITS(self.arcpix + self.bias_flux, self.img_dict['arc'], '{}'.format(self.line_name), self.spec)
             print('FITS for arc done')
         
+        # If noise
         if self.noise:
 
             self.arcpix = make_realistic_noise(self.size, self.overscan, self.quards, 
@@ -903,14 +1268,27 @@ class generate_images():
                 print('FITS for arc done')
     
     # --------------------------------------------
+
+    # --- uncomment this if there is full spectra ---
     
     # def make_arc_from_full_spec(self, FITS=False):
 
     #     """
-    #     Class to make all images: flat, bias, wavemap, and arc lines. 
+    #     Class to make arc images from full spectrum.
+
+    #     Parameters
+    #     ----------
+    #     FITS    : bool
+    #             generate FITS image or not
+
+    #     Returns
+    #     ----------
+    #     specpix : 2D array
+    #             arc image with full spectrum not just arc lines
 
     #     """
 
+    #     # Loop for every slice
     #     for j in range(48):
 
     #         n = j + 1
@@ -993,146 +1371,60 @@ class generate_images():
 
 if __name__ == "__main__":
 
-    # Load files
-    # disp = pd.read_csv('files/dispersion.dat', sep=" ")
-
-    # arc_lines = pd.read_csv('files/fp_list.csv')
-    # line_name = 'fabry_perot'
-    
+    # Determine dispersion
+    disp = pd.read_csv('data/BMUS_IFU-0236-1.53_disp.dat', sep=" ")
+     
     # Load parameters from ASCII
-    param = read_ascii_config('parameters_input_new.ascii')
+    param = read_ascii_config('data/parameters_input_new.ascii')
 
     # Access parameters
     size_x = int(param['size_x'])
     size_y = int(param['size_y'])
     flat_flux = int(param['flat_flux'])
     bias_flux = int(param['bias_flux'])
-    # slice_width = int(param['slice_width'])
-    # slice_width = 76
     FWHM = float(param['FWHM'])
     scale_amp = int(param['scale_amp'])
     gaus_width = int(param['gaus_width'])
     overscan = 32
     noise = True
+    size=[size_x, size_y]
 
-    # line_dict = {
-            #  'ThAr_4MOST':[5, 'ThAr', '4MOST'],
-            #  'HgNe_4MOST': [5, 'HgNe', '4MOST'],
-            #  'Cd_PR': [5, 'Cd', 'G1'],
-            #  'HgAr_PR': [5, 'HgAr', 'G1'],
-            #  'HgNe_PR':[5, 'HgNe', 'G1'],
-            #  'Kr_PR':[5, 'Kr', 'G1'],
-            #  'Xe_PR':[5, 'Xe', 'G1'],
-            #  'Zn_PR':[5, 'Zn', 'G1'],
-            # #  'Ar_PR':[5, 'Ar', 'G2'],
-            #  'Ne_PR':[5, 'Ne', 'G2'],
-            #  'Fabry-Perot_4MOST':[2, 'Fabry-Perot', None]}
+    # Main dictionary for all files
+    lines = {'Cd': [gaus_width],
+            'Cs': [gaus_width],
+            'He': [gaus_width],
+            'Hg': [gaus_width],
+            # 'HgCd': [],
+            # 'HgCd-LLG300': [],
+            'Zn': [gaus_width],
+            'HgAr': [gaus_width],
+            'Xe': [gaus_width],
+            'FP': [2]
+            }
 
-    # -----------------------------------------------
+    # Generate each images
+    for key, l in lines.items():
 
-    # line_4most = {'Cd_4MOST': [5, 'Cd', '4MOST'],
-    #               'Cs_4MOST': [5, 'Cs', '4MOST'],
-    #               'He_4MOST': [5, 'He', '4MOST'],
-    #               'Hg_4MOST': [5, 'Hg', '4MOST'],
-    #               'Zn_4MOST': [5, 'Zn', '4MOST']
-    #             }
-    
-    # for key, l in line_4most.items():
+        line_name = key
+        arc_lines = pd.read_csv('data/lines_for_img/{}.csv'.format(key))
 
-    #     line_name = l[1]
-
-    #     print('generating images for {}'.format(key))
-
-    #     disp = pd.read_csv('files/new_dispersion.dat', sep=" ")
-
-    #     # full_spec_line = pd.read_csv('files/4most-new/spectra/spectra_{}_blue.csv'.format(l[1]), sep=",")
-    #     spec = False
-    #     full_spec_line = False
-    #     arc_lines = pd.read_csv('files/4most-new/{}_list_new.csv'.format(l[1]))
-    #     source = '4MOST'
-
-    #     gen = generate_images(pix_disp=disp, size=[size_x, size_y], overscan=overscan, 
-    #                      FWHM=FWHM, scale_amp=scale_amp, 
-    #                     gaus_width=int(l[0]), flat_flux=flat_flux, bias_flux=bias_flux,
-    #                     arc_lines=arc_lines, line_name=line_name, spec=spec,
-    #                     full_spec=full_spec_line, source=source, noise=noise)
-
-    #     gen.generate_pix_disp()
-
-    #     if l[1] == 'Cd':
-    #         gen.make_flat_wavemap_bias(FITS=True)
+        gen = generate_images(pix_disp=disp, size=[size_x, size_y], overscan=overscan,
+                            FWHM=FWHM, scale_amp=scale_amp, arc_lines=arc_lines,
+                            line_name=line_name, gaus_width=l[0], 
+                            flat_flux=flat_flux, bias_flux=bias_flux,noise=noise, source='4MOST')
         
-    #     gen.make_flat_wavemap_bias()
-    #     gen.make_arc(FITS=True)
-        
-    #     print('all images for {} done'.format(key))
-    #     print('----')
-        
-    # -----------------------------------------------
-    
-    # for key, l in line_dict.items():
+        # Get pix dispersion
+        gen.generate_pix_disp()
 
-    #     line_name = l[1]
+        if key == 'Cd':
 
-    #     print('generating images for {}'.format(key))
+            # First arc line gets bias, flat, and wvl
+            gen.make_flat_wavemap_bias(FITS=True)
 
-    #     disp = pd.read_csv('files/new_dispersion.dat', sep=" ")
+        # Make arc line images
+        gen.make_arc(FITS=True)
 
-    #     if l[2] != None:
-
-    #         spec = True
-    #         full_spec_name = 'Pen-Ray-spectra/{}_{}.asc'.format(l[1], l[2])
-
-    #         if (l[2] == 'G1') or (l[2] == 'G2'):
-
-    #             full_spec_line = pd.read_csv(full_spec_name, sep=",", names=['lambda', 'flux'])
-    #             full_spec_line['lambda'] = full_spec_line['lambda'] * 10
-    #             arc_lines = pd.read_csv('files/{}_list.csv'.format(l[1]))
-    #             source = 'Pen-Ray'
-
-    #         else:
-
-                # full_spec_line = pd.read_csv(full_spec_name, sep=",")
-                # arc_lines = pd.read_csv('files/{}_4MOST_list.csv'.format(l[1]))
-        #       # source = '4MOST'
-
-        # else:
-        #     spec = False
-        #     full_spec_line = None
-        # #     arc_lines = pd.read_csv('files/{}_list.csv'.format(l[1]))
-        #     source = '4MOST'
-        
-        # gen = generate_images(pix_disp=disp, size=[size_x, size_y], overscan=overscan, 
-        #                       slice_width=slice_width, FWHM=FWHM, scale_amp=scale_amp, 
-        #                       gaus_width=int(l[0]), flat_flux=flat_flux, bias_flux=bias_flux,
-        #                       arc_lines=arc_lines, line_name=line_name, spec=spec,
-        #                       full_spec=full_spec_line, source=source, noise=noise)
-        
-        # gen.generate_pix_disp()
-
-        # if l[1] == 'ThAr':
-        #     gen.make_flat_wavemap_bias(FITS=True)
-        
-        # gen.make_flat_wavemap_bias()
-        # gen.make_arc(FITS=True)
-
-        # if l[2] != None:
-        #     gen.make_arc_from_full_spec(FITS=True)
-        
-        # print('all images for {} done'.format(key))
-        # print('----')
-
-    # -----------------------------------------------
-    
-    # gen.make_flat_wavemap_bias(FITS=True)
-    # gen.make_arc(FITS=True)
-    # gen.make_arc_from_full_spec(FITS=True)
-
-    # print(gen.pix_disp)
-
-    # print(gen.pix_disp)
-    # print(gen.arcpix)
-
+        print('Arc {} done'.format(key))
 
 
 

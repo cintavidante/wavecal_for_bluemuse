@@ -1,0 +1,5 @@
+*startup.sh
+*checkpoints*
+*_pycache_*
+output/files_from_py/*.fits
+spectra/*.fits

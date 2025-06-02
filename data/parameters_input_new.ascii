@@ -1,0 +1,9 @@
+# Parameters to generate simulation FITS images for BlueMUSE
+size_x = 4096
+size_y = 4112
+flat_flux=10000
+bias_flux=1000
+slice_width=76
+FWHM=1.4
+scale_amp=25000
+gaus_width=5

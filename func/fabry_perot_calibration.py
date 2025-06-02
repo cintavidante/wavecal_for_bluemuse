@@ -332,7 +332,7 @@ class Wavefp():
         self.cavity = 400 * u.um
 
         # Call arc lines for a particular filter
-        self.lines = pd.read_csv('line_lists/all_gaus/master_peaks_{}.csv'.format(self.color), index_col=None)
+        self.lines = pd.read_csv('line_lists/master_peaks_{}.csv'.format(self.color), index_col=None)
         
         # Fabry-perot spectrum
         self.fp = pd.read_csv('spectra/spectra_FP_{}.csv'.format(self.color), index_col=None)
@@ -1016,6 +1016,11 @@ class Wavefp():
             ax[1].plot(self.all_lines['fit lambda'], self.all_lines['residuals'], color=cmap(1/2))
             ax[1].scatter(self.lines['fit lambda'], self.lines['residuals'], s=10, color=cmap(1/4))
 
+            ax[0].set_title('wavelength calibration arc lines + FP ({} channel)'.format(self.color), fontsize=15)
+            ax[0].set_ylabel('pixels', fontsize=12)
+            ax[1].set_ylabel('residual [$\AA$]', fontsize=12)
+            ax[1].set_xlabel('wavelength [$\AA$]', fontsize=12)
+
             plt.show()
 
 # ----------------------------------------------------------------------------------
@@ -1034,7 +1039,21 @@ if __name__ == '__main__':
     fil = filter['blue']
     wp_b = Wavefp(color='blue', prom=fil[0], height=fil[1], dist=fil[2], start=1000)
 
+    # Do wavelength calibration for both blue and green filter
     wp_b.get_wave_cal(plot_final=True)
+    wp_g.get_wave_cal(plot_final=True)
+
+    # Combine all identified lines
+    master_fp_peaks = pd.concat([wp_b.all_lines, wp_g.all_lines], axis=0, ignore_index=True)
+
+    # Only use FP peaks and not arc lines
+    master_fp_peaks = master_fp_peaks[master_fp_peaks['source'] == 'fp']
+    master_fp_peaks = master_fp_peaks[['fit lambda']]
+    master_fp_peaks = master_fp_peaks.rename(columns={'fit lambda': 'lambda'})
+
+    # Export to CSV
+    master_fp_peaks.to_csv('line_lists/master_peaks_fp.csv', index=False)
+
 
 
 
