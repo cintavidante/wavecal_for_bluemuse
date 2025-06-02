@@ -1,3 +1,33 @@
+"""
+---------------------
+Wavecal_for_BlueMUSE
+---------------------
+
+Cinta Vidante, 2025
+
+This module contains functions and classes used to extract spectra from 4MOST images. 
+
+There are 3 methods of extracting the spectra. Each method extract 5 peaks/dots/spectra
+of the arc lamps from the images. The difference between each method is described as follows:
+
+- esuway
+    - always takes the last peak, regardless the strength of the peak
+- tsuway
+    - takes the maximum/strongest peak 
+- average
+    - average all 5 peaks
+
+I found that the esuway creates more noise while the tsuway gives more stable spectra 
+similar to the average method.
+
+
+Part of my work on BlueMUSE with Peter Weilbacher, AIP.
+
+"""
+
+# ------------------------------------------------------------------------
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -204,7 +234,8 @@ if __name__ == "__main__":
     filter = {'green': [2],
             'blue': [3]}
 
-    # Main dictionary for all files
+    # Main dictionary for all files.
+    # Put the spectrum of each arc lamp in te dictionary as shown here
     files = { 
             # 'Cd': ['HP-Cd_combined_novar.fits'],
             # 'Cs': ['HP-Cs_combined_novar.fits'],
@@ -227,6 +258,7 @@ if __name__ == "__main__":
 
     # ----------------------------------------------------------------
 
+    # Open LDLS 
     LDLS = fits.open(LDLS_file)
 
     for color, c in filter.items():
